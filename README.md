@@ -90,6 +90,7 @@ New features created included:
 These features helped make the analysis more business-focused and improved model input quality.
 
 ## Exploratory Data Analysis
+Some of the exampples of EDA includes:
 
 ### Cancellation Rate by Lead Time Group
 Bookings with longer lead times showed higher cancellation rates.
@@ -106,10 +107,6 @@ Higher ADR price bands showed higher cancellation rates.
 
 ![Cancellation Rate by ADR Price Band](images/adr_cancellation.png)
 
-### Cancellation Rate by Customer Type
-Transient customers showed higher cancellation rates compared to other customer types.
-
-![Cancellation Rate by Customer Type](images/customer_type_cancellation.png)
 
 ## Key EDA Insights
 - Bookings with longer lead times had significantly higher cancellation rates.
