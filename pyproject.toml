@@ -35,3 +35,8 @@ extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
+
+[tool.ruff.lint.isort]
+# Declare the src-layout package explicitly. Older pinned Ruff releases do not
+# reliably infer first-party packages from setuptools discovery metadata.
+known-first-party = ["hotel_cancellation"]
