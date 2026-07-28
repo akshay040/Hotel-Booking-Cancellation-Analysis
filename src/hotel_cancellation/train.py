@@ -32,7 +32,14 @@ def temporal_split(frame: pd.DataFrame, test_fraction: float = 0.2):
     ]
 
 
-def train(data_path: Path, output_dir: Path, random_state: int = 42) -> dict:
+def train(
+    data_path: Path,
+    output_dir: Path,
+    random_state: int = 42,
+    importance_repeats: int = 3,
+) -> dict:
+    if importance_repeats < 1:
+        raise ValueError("importance_repeats must be at least 1")
     frame = validate_training_frame(pd.read_csv(data_path, low_memory=False))
     train_frame, test_frame = temporal_split(frame)
     LOGGER.info("Training on %d rows; evaluating on %d rows", len(train_frame), len(test_frame))
@@ -57,9 +64,11 @@ def train(data_path: Path, output_dir: Path, random_state: int = 42) -> dict:
         test_frame[FEATURES],
         test_frame[TARGET],
         scoring="roc_auc",
-        n_repeats=3,
+        n_repeats=importance_repeats,
         random_state=random_state,
-        n_jobs=-1,
+        # A single worker avoids duplicating the holdout frame and fitted pipeline in
+        # memory. GitHub-hosted runners can otherwise be killed while joblib fans out.
+        n_jobs=1,
     )
     importance_frame = pd.DataFrame(
         {
@@ -82,6 +91,7 @@ def parse_args():
     parser.add_argument("--data", type=Path, default=Path("hotel_bookings_cleaned_enhanced.csv"))
     parser.add_argument("--output", type=Path, default=Path("artifacts"))
     parser.add_argument("--random-state", type=int, default=42)
+    parser.add_argument("--importance-repeats", type=int, default=3)
     return parser.parse_args()
 
 
@@ -90,7 +100,7 @@ def main() -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
-    train(args.data, args.output, args.random_state)
+    train(args.data, args.output, args.random_state, args.importance_repeats)
 
 
 if __name__ == "__main__":

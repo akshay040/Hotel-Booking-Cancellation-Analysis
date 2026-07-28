@@ -17,10 +17,15 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install -r requirements-dev.txt
-      - run: ruff check .
-      - run: pytest
-      - run: python -m hotel_cancellation.train --data hotel_bookings_cleaned_enhanced.csv --output artifacts
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m ruff check .
+      - run: python -m pytest
+      - name: Full-data training smoke test
+        run: >-
+          python -m hotel_cancellation.train
+          --data hotel_bookings_cleaned_enhanced.csv
+          --output artifacts
       - uses: actions/upload-artifact@v4
         with:
           name: model-evaluation
@@ -40,4 +45,3 @@ jobs:
           tags: hotel-cancellation:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
