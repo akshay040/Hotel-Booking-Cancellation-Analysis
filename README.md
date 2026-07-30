@@ -69,7 +69,7 @@ docker build -t hotel-cancellation .
 docker run --rm -p 8501:8501 hotel-cancellation
 ```
 
-The image installs pinned runtime dependencies, runs as an unprivileged user, trains from the packaged dataset at startup, and exposes a Streamlit health check. For a real release, train in a controlled pipeline, version the dataset/model together, and deploy an immutable reviewed artifact instead of training at container start.
+The image installs pinned runtime dependencies, trains and packages the model during the image build, runs the application as an unprivileged user, and exposes a Streamlit health check. Container startup therefore does not repeat an expensive training job. For a real release, train in a controlled pipeline and version the dataset/model together before building an immutable reviewed image.
 
 ## Repository map
 
