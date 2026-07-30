@@ -1,206 +1,113 @@
-# Hotel Booking Cancellation Analysis
+# Hotel Booking Cancellation Risk
 
-## Project Overview
-This project analyses hotel booking cancellations using Python, exploratory data analysis, feature engineering, and machine learning. The goal is to identify key factors associated with booking cancellations and build a predictive model that can help estimate cancellation risk.
+[![CI](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 
-This project connects directly to front office and hospitality operations, where cancellations, booking behaviour, occupancy planning, and guest follow-up are important business areas.
+An end-to-end, leakage-aware machine-learning portfolio project for estimating whether a hotel booking will be cancelled. It turns the original exploratory notebook into a tested Python package, reproducible training command, explainable evaluation artifact, and deployable Streamlit application.
 
-## Business Objective
-The objective of this project was to answer key business questions:
+> **Responsible-use note:** this is a decision-support demonstration. A risk score should prompt proportionate, routine follow-up—not automatic cancellation, pricing, or adverse treatment.
 
-- What factors are most associated with hotel booking cancellations?
-- Do lead time, ADR, customer type, market segment, and deposit type influence cancellation behaviour?
-- Are returning guests less likely to cancel?
-- Do special requests or booking changes indicate stronger guest commitment?
-- Can machine learning predict whether a booking is likely to be cancelled?
+## Business problem
 
-## Dataset Source
-The dataset used in this project is the Hotel Booking Demand Dataset.
+Cancellations make occupancy and staffing forecasts harder. The model estimates cancellation probability from information plausibly available around booking time. A hotel could use the estimate to prioritise confirmation messages, provided it validates the model on its own recent data and monitors guest impact.
 
-Source: [Kaggle - Hotel Booking Demand Dataset](https://www.kaggle.com/datasets/jessemostipak/hotel-booking-demand)
+## Architecture
 
-The dataset contains hotel booking records including:
-- hotel type
-- lead time
-- arrival date
-- stay duration
-- number of guests
-- meal type
-- country
-- market segment
-- distribution channel
-- booking changes
-- deposit type
-- customer type
-- ADR
-- special requests
-- cancellation status
+```text
+CSV → schema validation → chronological split
+    → in-pipeline imputation + scaling/one-hot encoding
+    → class-balanced logistic regression
+    → holdout metrics + permutation importance + model artifact
+    → Streamlit inference (same fitted pipeline)
+```
 
-## Tools Used
-- Python
-- pandas
-- NumPy
-- matplotlib
-- scikit-learn
-- XGBoost
-- Jupyter Notebook
+The production workflow lives in `src/hotel_cancellation`; the notebook remains historical analysis rather than the deployment source of truth.
 
-## Project Workflow
-The project followed this workflow:
+## Leakage and evaluation design
 
-1. Data loading and initial inspection
-2. Missing value handling
-3. Duplicate removal
-4. Feature engineering
-5. Exploratory data analysis
-6. Advanced cancellation analysis
-7. Machine learning model building
-8. Model comparison and evaluation
-9. Business conclusion and recommendations
+- The newest 20% of arrivals are held out. This more closely represents predicting future bookings than a random split.
+- Every learned preprocessing step is inside the scikit-learn pipeline and is fitted only on training data.
+- Outcome-derived `reservation_status` and `reservation_status_date` are excluded. `assigned_room_type` is also excluded because assignment timing may make it unavailable at scoring time.
+- Metrics include ROC-AUC, average precision, accuracy, precision, recall, F1, Brier score, and the confusion matrix at a documented 0.50 demonstration threshold.
+- Class balancing changes the probability distribution; calibration and threshold selection should be revisited using local intervention costs before operational use.
+- Model-agnostic permutation importance is calculated against the untouched chronological holdout. Importance describes model reliance, not causation.
 
-## Data Cleaning and Preparation
-Key cleaning steps included:
+The old README reported notebook metrics from a different experimental setup. They are not presented as results of this pipeline. Run training to generate truthful, machine-readable metrics for the current code and environment in `artifacts/metrics.json`; generated artifacts are intentionally not committed.
 
-- Filled missing values in `children`, `country`, and `agent`
-- Dropped the `company` column due to a high number of missing values
-- Removed duplicate booking records
-- Removed invalid bookings with zero total guests
-- Created a proper arrival date column
-- Created new business-focused features for analysis and modelling
+## Quick start
 
-## Feature Engineering
-New features created included:
+Python 3.10+ is supported (CI uses 3.11).
 
-- `total_guests`
-- `total_nights`
-- `arrival_date`
-- `has_special_request`
-- `has_previous_cancellation`
-- `is_family_booking`
-- `booking_party_type`
-- `has_weekend_stay`
-- `stay_length_group`
-- `adr_group`
-- `room_type_changed`
-- `lead_time_risk`
-- `has_previous_bookings`
-- `has_booking_changes`
-- `was_on_waiting_list`
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements-dev.txt
 
-These features helped make the analysis more business-focused and improved model input quality.
+# Tests and static analysis
+ruff check .
+pytest
 
-## Exploratory Data Analysis
-Some of the exampples of EDA includes:
+# Train and evaluate
+python -m hotel_cancellation.train \
+  --data hotel_bookings_cleaned_enhanced.csv \
+  --output artifacts
 
-### Cancellation Rate by Lead Time Group
-Bookings with longer lead times showed higher cancellation rates.
+# Explore generated evidence
+cat artifacts/metrics.json
+head artifacts/permutation_importance.csv
 
-![Cancellation Rate by Lead Time Group](images/lead_time_cancellation.png)
+# Launch the app
+streamlit run app.py
+```
 
-### Cancellation Rate by Deposit Type
-Cancellation rates varied significantly by deposit type.
+The app opens at `http://localhost:8501`. If an artifact is absent, it gives an explicit training instruction rather than crashing with an opaque file error.
 
-![Cancellation Rate by Deposit Type](images/deposit_type_cancellation.png)
+## Docker
 
-### Cancellation Rate by ADR Price Band
-Higher ADR price bands showed higher cancellation rates.
+```bash
+docker build -t hotel-cancellation .
+docker run --rm -p 8501:8501 hotel-cancellation
+```
 
-![Cancellation Rate by ADR Price Band](images/adr_cancellation.png)
+The image installs pinned runtime dependencies, trains and packages the model during the image build, runs the application as an unprivileged user, and exposes a Streamlit health check. Container startup therefore does not repeat an expensive training job. For a real release, train in a controlled pipeline and version the dataset/model together before building an immutable reviewed image.
 
+## Repository map
 
-## Key EDA Insights
-- Bookings with longer lead times had significantly higher cancellation rates.
-- Longer stays, especially 15+ night bookings, showed higher cancellation risk.
-- Higher ADR price bands were associated with higher cancellation rates.
-- Returning guests had a much lower cancellation rate than first-time guests.
-- Guests with special requests appeared less likely to cancel.
-- Bookings with changes showed lower cancellation rates, suggesting stronger guest engagement.
-- Transient customers and online travel agency bookings showed higher cancellation risk.
-- Cancellation rates varied by month, indicating seasonal cancellation patterns.
+| Path | Purpose |
+|---|---|
+| `src/hotel_cancellation/features.py` | Feature contract and input validation |
+| `src/hotel_cancellation/model.py` | Reusable preprocessing/model pipeline |
+| `src/hotel_cancellation/train.py` | Temporal training, evaluation, explainability, serialization, logging |
+| `src/hotel_cancellation/evaluate.py` | Central metric computation |
+| `app.py` | Streamlit scoring interface and model limitations |
+| `tests/` | Unit tests for schema, unseen categories, metrics, and splitting |
+| `.github/workflows/ci.yml` | Lint, tests, full training smoke test, artifact upload, Docker build |
+| `Hotel_Booking_Cancellation_Analysis.ipynb` | Original exploratory work (not production inference code) |
 
-## Machine Learning Models
-The target variable was:
+## Dataset and limitations
 
-`is_canceled`
+The included cleaned CSV derives from the [Hotel Booking Demand dataset](https://www.sciencedirect.com/science/article/pii/S2352340918315191), describing two Portuguese hotels and arrivals from 2015–2017. Important limitations:
 
-Where:
+- performance may not transfer across hotels, countries, booking systems, or time;
+- historic policies and channel behaviour can become stale (concept drift);
+- country can proxy geography or socioeconomic factors, so impact must be reviewed and its inclusion reconsidered for each use case;
+- the dataset does not establish why a booking was cancelled, so feature importance is not causal;
+- the default threshold is not a business recommendation.
 
-- `0` = Not Cancelled
-- `1` = Cancelled
+Before production: define intervention costs, assess calibration and subgroup errors, use a time-based backtest over several periods, add drift/performance monitoring, obtain privacy and legal review, and document a retraining/rollback process.
 
-The following models were tested:
+## Interview walkthrough
 
-- Logistic Regression
-- Random Forest Classifier
-- Gradient Boosting Classifier
-- XGBoost Classifier
+1. **Why a pipeline?** It prevents preprocessing leakage and guarantees training/inference parity, including safe handling of unseen categories.
+2. **Why chronological holdout?** Deployment predicts later bookings; a random split can overstate performance when patterns change over time.
+3. **Why logistic regression?** It is a strong, explainable baseline. Complexity should be earned through repeated time-based validation, not selected from one test set.
+4. **Why more than accuracy?** Cancellation classes and intervention costs differ. Recall measures missed cancellations, precision measures wasted follow-ups, ROC-AUC measures ranking, average precision focuses on the positive class, and Brier score assesses probability error.
+5. **Why permutation importance?** It measures the drop in holdout ROC-AUC after disrupting a feature and works on the whole pipeline. Correlated predictors can share or mask importance, and no importance is causal.
+6. **What would you improve next?** Rolling-window validation, threshold/cost analysis, calibration curves, subgroup review, experiment tracking, artifact/data versioning, and production drift monitoring.
 
-## Model Performance
+## Reproducibility
 
-| Model | Accuracy | Precision | Recall | F1 Score | ROC-AUC |
-|---|---:|---:|---:|---:|---:|
-| Logistic Regression | 80.10% | 69.45% | 49.48% | 57.79% | 82.63% |
-| Random Forest | 81.23% | 70.21% | 55.27% | 61.85% | 85.09% |
-| Gradient Boosting | 80.85% | 72.48% | 49.04% | 58.50% | 84.75% |
-| XGBoost | 82.08% | 74.96% | 52.37% | 61.66% | 86.05% |
-
-### Model Performance Comparison
-![Model Performance Comparison](images/model_comparison.png)
-
-### XGBoost Confusion Matrix
-![XGBoost Confusion Matrix](images/xgboost_confusion_matrix.png)
-
-## Final Model Selection
-XGBoost was selected as the final model because it achieved the best overall performance across the tested models. It had the highest accuracy, precision, F1-score, and ROC-AUC.
-
-Random Forest achieved slightly higher recall, meaning it caught more actual cancellations, but XGBoost produced fewer false positives and better overall separation between cancelled and non-cancelled bookings.
-
-## Feature Importance
-The most important predictors of cancellation included:
-
-- lead time
-- ADR
-- total special requests
-- agent
-- stay length
-- booking changes
-- market segment
-- customer type
-- previous cancellation history
-
-![Feature Importance](images/feature_importance.png)
-
-## Business Recommendations
-Based on the analysis and machine learning results:
-
-- Long lead-time bookings should be monitored more closely because they showed higher cancellation risk.
-- High ADR bookings may need proactive confirmation or follow-up.
-- Returning guests appear more reliable and could be targeted through loyalty strategies.
-- Bookings with no special requests may require additional engagement.
-- Transient and online travel agency bookings should be considered higher-risk segments.
-- The model can be used as a risk-screening tool to prioritise bookings for follow-up.
-
-## Final Business Conclusion
-This project showed how hotel booking data can be used to understand cancellation behaviour and predict cancellation risk.
-
-The analysis found that cancellation behaviour was strongly influenced by lead time, ADR, customer type, market segment, deposit type, stay length, special requests, booking changes, previous booking history, and room assignment status.
-
-From a business perspective, the model could help hotel front office and revenue teams identify high-risk bookings earlier. This could support better occupancy forecasting, targeted guest follow-ups, improved cancellation policy planning, and more informed operational decision-making.
-
-The model should not replace human judgement, but it can be used as a decision-support tool to prioritise bookings that may need additional attention.
-
-## Files Included
-- `Hotel_Booking_Cancellation_Analysis.ipynb` — Jupyter Notebook containing data cleaning, EDA, feature engineering, and machine learning
-- `hotel_bookings_cleaned_enhanced.csv` — cleaned and enhanced dataset
-- `images/` — chart and model output images used in this README
-
-## Skills Demonstrated
-- Data cleaning
-- Exploratory data analysis
-- Feature engineering
-- Data visualisation
-- Classification modelling
-- Model evaluation
-- Business insight generation
-- Hospitality analytics
-- Machine learning interpretation
+- Runtime and development dependencies are separated and pinned in `pyproject.toml`.
+- Randomised model and importance operations use an explicit seed.
+- CI recreates installation, linting, unit tests, complete training, and a Docker build on every pull request.
+- Logs record sample sizes, output location, and holdout ROC-AUC without logging guest-level data.

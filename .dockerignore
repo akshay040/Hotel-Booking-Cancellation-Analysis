@@ -1,0 +1,10 @@
+.git
+.github
+.venv
+__pycache__
+.pytest_cache
+artifacts
+images
+tests
+Hotel_Booking_Cancellation_Analysis.ipynb
+
